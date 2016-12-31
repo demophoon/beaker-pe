@@ -10,10 +10,11 @@ class ClassMixedWithDSLInstallUtils
   include Beaker::DSL::Patterns
   include Beaker::DSL::PE
 
-  attr_accessor :hosts, :metadata
+  attr_accessor :hosts, :metadata, :options
 
   def initialize
     @metadata = {}
+    @options = {}
   end
 
   # Because some the methods now actually call out to the `step` method, we need to
@@ -387,6 +388,77 @@ describe ClassMixedWithDSLInstallUtils do
 
       it 'sets meep settings' do
         expect(slice_installer_options(host)).to eq(meep_settings)
+      end
+    end
+  end
+
+  describe 'use_meep_for_classification?' do
+    let(:feature_flag) { nil }
+    let(:environment_feature_flag) { nil }
+    let(:answers) do
+      {
+        :answers => {
+          :'pe_infrastructure::use_meep_for_classification' => feature_flag,
+        }
+      }
+    end
+    let(:options) do
+      feature_flag.nil? ?
+        opts :
+        opts.merge(answers)
+    end
+    let(:host) { unixhost }
+
+    before(:each) do
+      subject.options = options
+      if !environment_feature_flag.nil?
+        allow(ENV).to receive(:[]).and_call_original
+        expect(ENV).to receive(:[]).with("PE_USE_MEEP_FOR_CLASSIFICATION").and_return(environment_feature_flag)
+      end
+    end
+
+    it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+    it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(false) }
+
+    context 'feature flag false' do
+      let(:feature_flag) { false }
+
+      it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+      it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(false) }
+    end
+
+    context 'feature flag true' do
+      let(:feature_flag) { true }
+
+      it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+      it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(true) }
+    end
+
+    context 'environment feature flag true' do
+      let(:environment_feature_flag) { true }
+
+      it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+      it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(true) }
+
+      context 'answers feature flag false' do
+        let(:feature_flag) { false }
+
+        it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+        it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(false) }
+      end
+    end
+
+    context 'environment feature flag false' do
+      let(:environment_feature_flag) { false }
+
+      it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+      it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(false) }
+
+      context 'answers feature flag true' do
+        let(:feature_flag) { true }
+
+        it { expect(subject.use_meep_for_classification?('2016.5.0')).to eq(false) }
+        it { expect(subject.use_meep_for_classification?('2017.1.0')).to eq(true) }
       end
     end
   end

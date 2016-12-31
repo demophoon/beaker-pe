@@ -25,6 +25,14 @@ module Beaker
 
         # Version of PE when we switched from legacy installer to MEEP.
         MEEP_CUTOVER_VERSION = '2016.2.0'
+        # Version of PE when we switched to using meep for classification
+        # instead of PE node groups
+        MEEP_CLASSIFICATION_VERSION = '2017.1.0'
+        # PE-18799 temporary default used for meep classification check while
+        # we navigate the switchover.
+        # PE-18718 switch flag to true once beaker-pe, beaker-answers,
+        # beaker-pe-large-environments and pe_acceptance_tests are ready
+        DEFAULT_MEEP_CLASSIFICATION = false
 
         # @!macro [new] common_opts
         #   @param [Hash{Symbol=>String}] opts Options to alter execution.
@@ -617,6 +625,34 @@ module Beaker
           #windows agents from 4.0 -> 2016.1.2 were only installable via the aio method
           #powershell2 bug was fixed in PE 2016.4.3
           (host['platform'] =~ /windows/ && (version_is_less(host['pe_ver'], '2016.4.0') && !version_is_less(host['pe_ver'], '3.99'))) || (host['platform'] =~ /windows-2008r2/ && (version_is_less(host['pe_ver'], '2016.4.3') && !version_is_less(host['pe_ver'], '3.99')))
+        end
+
+        # True if version is greater than or equal to MEEP_CLASSIFICATION_VERSION (2017.1.0)
+        # (PE-18718) AND the temporary feature flag is true.
+        # The temporary feature flag can be set directly in the :answers hash given
+        # in Beaker's host.cfg by setting 'pe_infrastructure::use_meep_for_classification'
+        # It can also be set using the env variable PE_USE_MEEP_FOR_CLASSIFICATION.
+        # The :answers hash value will take precedence over the env variable.
+        def use_meep_for_classification?(version)
+          # PE-18799 Remove the flag logic vv
+          flag_param = 'pe_infrastructure::use_meep_for_classification'.to_sym
+          answers = options[:answers] || {}
+          answers_flag = answers[flag_param]
+          environment_flag = ENV['PE_USE_MEEP_FOR_CLASSIFICATION']
+
+          temporary_flag = case
+          when !answers_flag.nil? then answers_flag
+          when !environment_flag.nil? then environment_flag
+          else DEFAULT_MEEP_CLASSIFICATION
+          end
+
+          # So that beaker-answers includes it if we pulled it in from the env
+          if answers_flag.nil? && !environment_flag.nil?
+            options[:answers] ||= {}
+            options[:answers][flag_param] = environment_flag
+          end
+          # PE-18799 ^^
+          !version_is_less(version, MEEP_CLASSIFICATION_VERSION) && temporary_flag
         end
 
         # On July 8th, 2016, the gpg key that was shipped and used to sign repos in
